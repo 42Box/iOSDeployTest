@@ -1,15 +1,50 @@
-fastlane documentation
+How are we using it
 ----
 
-# Installation
-
-Make sure you have the latest version of the Xcode command line tools installed:
+# Installation by Github Action
 
 ```sh
-xcode-select --install
+jobs:
+  build:
+    name: Deploy on macOS latest - Release for iOS
+    runs-on: macos-latest
+    env:
+      RUBY_VERSION: "2.6.10"
+      TUIST_VERSION: "3.36.2"
+
+    steps:
+      - name: Set up Ruby 2.6
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ env.RUBY_VERSION }}
+          bundler-cache: true
+
+      - name: Install Fastlane
+        run: brew install fastlane
+
+      - name: Set Keychain
+        run: fastlane set_keychain
+        env:
+            KEYCHAIN_NAME: ${{ secrets.KEYCHAIN_NAME }}
+            KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+
+      - name: Fastlane run
+        run: fastlane tf
 ```
 
-For _fastlane_ installation instructions, see [Installing _fastlane_](https://docs.fastlane.tools/#installing-fastlane)
+# Used
+
+```ruby
+# Constants
+APP_NAME = "iBox"
+SCHEME = "iBox"
+BUNDLE_ID = "com.box42.iBox"
+
+KEYCHAIN_NAME = ENV["KEYCHAIN_NAME"]
+KEYCHAIN_PASSWORD = ENV["KEYCHAIN_PASSWORD"]
+
+default_platform(:ios)
+```
 
 # Available Actions
 
@@ -17,24 +52,61 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 ### ios set_keychain
 
-```sh
-[bundle exec] fastlane ios set_keychain
+```ruby
+# Keychain
+  desc "Save To Keychain"
+  lane :set_keychain do |options|
+    create_keychain(
+      name: "#{KEYCHAIN_NAME}",
+      password: "#{KEYCHAIN_PASSWORD}",
+      default_keychain: true,
+      unlock: true,
+      timeout: 3600,
+      lock_when_sleeps: true
+    )
+
+    import_certificate(
+      certificate_path: "Tuist/Signing/release.cer",
+      keychain_name: "#{KEYCHAIN_NAME}",
+      keychain_password: "#{KEYCHAIN_PASSWORD}"
+    )
+
+    import_certificate(
+      certificate_path: "Tuist/Signing/release.p12",
+      keychain_name: "#{KEYCHAIN_NAME}",
+      keychain_password: "#{KEYCHAIN_PASSWORD}"
+    )
+
+    install_provisioning_profile(path: "Tuist/Signing/#{APP_NAME}.Release.mobileprovision")
+  end
 ```
 
 Save To Keychain
 
 ### ios tf
 
-```sh
-[bundle exec] fastlane ios tf
+```ruby
+# Upload TestFlight
+  desc "Push to TestFlight"
+  lane :tf do |options|
+    # AppStore Connect API key
+    app_store_connect_api_key(is_key_content_base64: true, in_house: false)
+
+    # BuildNumber Up
+    increment_build_number({ build_number: latest_testflight_build_number() + 1 })
+
+    # Build App
+    build_app(
+      workspace: "#{APP_NAME}.xcworkspace",
+      scheme: "#{SCHEME}",
+      export_method: "app-store"
+    )
+
+    # Upload to TestFlight
+    upload_to_testflight(skip_waiting_for_build_processing: true)
+  end
 ```
 
 Push to TestFlight
 
 ----
-
-This README.md is auto-generated and will be re-generated every time [_fastlane_](https://fastlane.tools) is run.
-
-More information about _fastlane_ can be found on [fastlane.tools](https://fastlane.tools).
-
-The documentation of _fastlane_ can be found on [docs.fastlane.tools](https://docs.fastlane.tools).
