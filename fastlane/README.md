@@ -107,6 +107,6 @@ Save To Keychain
   end
 ```
 
-Push to TestFlight
+Push to TestFlight test
 
 ----
